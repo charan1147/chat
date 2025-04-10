@@ -12,7 +12,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkLoginStatus = async () => {
       try {
-        const { data } = await axios.get('http://localhost:5006/api/users/me', { withCredentials: true });
+        const { data } = await axios.get('https://chat-4-hb4p.onrender.com/api/users/me', { withCredentials: true });
         setUser(data.data);
       } catch (error) {
         setUser(null);
@@ -26,7 +26,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (identifier, password) => {
     try {
       const { data } = await axios.post(
-        'http://localhost:5006/api/users/login',
+        'https://chat-4-hb4p.onrender.com/api/users/login',
         { identifier, password },
         { withCredentials: true }
       );
@@ -40,7 +40,7 @@ export const AuthProvider = ({ children }) => {
   const register = async (username, email, password) => {
     try {
       const { data } = await axios.post(
-        'http://localhost:5006/api/users/register',
+        'https://chat-4-hb4p.onrender.com/api/users/register',
         { username, email, password },
         { withCredentials: true }
       );
@@ -52,7 +52,7 @@ export const AuthProvider = ({ children }) => {
   };
   const logout = async () => {
     try {
-      await axios.post('http://localhost:5006/api/users/logout', {}, { withCredentials: true });
+      await axios.post('https://chat-4-hb4p.onrender.com/api/users/logout', {}, { withCredentials: true });
       setUser(null);
       navigate('/login');
     } catch (error) {

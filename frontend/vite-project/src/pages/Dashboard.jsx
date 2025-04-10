@@ -4,7 +4,7 @@ import { Navigate } from 'react-router-dom';
 import axios from 'axios';
 import io from 'socket.io-client';
 
-const socket = io('http://localhost:5006', { withCredentials: true });
+const socket = io('https://chat-4-hb4p.onrender.com', { withCredentials: true });
 
 const Dashboard = () => {
   const { user, loading } = useAuth();
@@ -29,7 +29,7 @@ const Dashboard = () => {
       socket.emit('join', user.id);
 
       axios
-        .get(`http://localhost:5006/api/users/contacts/${user.id}`, { withCredentials: true })
+        .get(`https://chat-4-hb4p.onrender.com/api/users/contacts/${user.id}`, { withCredentials: true })
         .then((res) => setContacts(res.data))
         .catch((err) => console.error('Error fetching contacts:', err));
 
@@ -38,7 +38,7 @@ const Dashboard = () => {
         // Auto-update contacts if new sender
         if (!contacts.some((c) => c._id === message.from)) {
           axios
-            .get(`http://localhost:5006/api/users/contacts/${user.id}`, { withCredentials: true })
+            .get(`https://chat-4-hb4p.onrender.com/api/users/contacts/${user.id}`, { withCredentials: true })
             .then((res) => setContacts(res.data))
             .catch((err) => console.error('Error updating contacts:', err));
         }
@@ -89,7 +89,7 @@ const Dashboard = () => {
   const fetchMessages = async (contactId) => {
     try {
       const { data } = await axios.get(
-        `http://localhost:5006/api/messages/history/${contactId}`,
+        `https://chat-4-hb4p.onrender.com/api/messages/history/${contactId}`,
         { params: { currentUser: user.id }, withCredentials: true }
       );
       setMessages(data);
@@ -150,7 +150,7 @@ const Dashboard = () => {
     }
     try {
       const { data } = await axios.post(
-        `http://localhost:5006/api/users/contacts/${user.id}`,
+        `https://chat-4-hb4p.onrender.com/api/users/contacts/${user.id}`,
         { identifier: newContactIdentifier },
         { withCredentials: true }
       );
