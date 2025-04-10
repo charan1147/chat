@@ -5,6 +5,7 @@ const session = require('express-session');
 const cookieParser = require('cookie-parser');
 const connectDB = require('./config/connectDB');
 const Message = require('./models/Message');
+const User = require('./models/User');
 const dotenv = require('dotenv');
 const cors = require('cors');
 
@@ -14,22 +15,33 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:5173',
+    origin: ["http://localhost:5173", "https://chat-4-hb4p.onrender.com"],
+    methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   },
 });
 
 connectDB();
 
-app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+app.use(
+  cors({
+    origin: ["http://localhost:5173", "https://chat-4-hb4p.onrender.com"],
+    credentials: true,
+  })
+);
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'your-secret-key',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false, httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 },
+    cookie: {
+      secure: process.env.NODE_ENV === 'production', // Set to false for localhost
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    },
   })
 );
 
@@ -42,24 +54,22 @@ io.on('connection', (socket) => {
 
   socket.on('join', (userId) => {
     socket.join(userId);
-    socket.broadcast.emit('user-online', userId);
+    io.emit('user-online', userId);
   });
 
   socket.on('send-message', async ({ toIdentifier, content, from }) => {
     try {
-      // Find the receiver by email or username
       const toUser = await User.findOne({ $or: [{ email: toIdentifier }, { username: toIdentifier }] });
       if (!toUser) {
         socket.emit('message-error', { message: 'Recipient not found' });
         return;
       }
 
-      const message = new Message({ from, to: toUser._id, content });
+      const message = new Message({ from, to: toUser._id.toString(), content });
       await message.save();
 
-      // Auto-add sender to receiver's contacts if not already added
       const receiver = await User.findById(toUser._id);
-      if (!receiver.contacts.includes(from)) {
+      if (receiver && !receiver.contacts.includes(from)) {
         receiver.contacts.push(from);
         await receiver.save();
       }
@@ -88,9 +98,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    socket.broadcast.emit('user-offline', socket.id);
+    io.emit('user-offline', socket.id);
   });
 });
 
-const PORT = process.env.PORT || 5005;
+const PORT = process.env.PORT || 5002;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
