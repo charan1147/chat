@@ -9,6 +9,7 @@ export const ChatProvider = ({ children }) => {
   const [messages, setMessages] = useState({});
   const [selectedUser, setSelectedUser] = useState(null);
   const { user } = useContext(AuthContext);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!user || !user._id) {
@@ -22,34 +23,37 @@ export const ChatProvider = ({ children }) => {
     console.log('Socket connected:', socket.connected, 'User ID:', user._id);
 
     const loadAllMessages = async () => {
-      try {
-        const res = await axios.get('http://localhost:5007/messages/all', {
-          withCredentials: true,
-        });
-        if (!res.data.data) {
-          console.log('No messages data received');
-          return;
-        }
-        const allMessages = res.data.data.reduce((acc, msg) => {
-          const fromId = msg.from && msg.from._id ? msg.from._id.toString() : null;
-          const toId = msg.to && msg.to._id ? msg.to._id.toString() : null;
-          if (!fromId || !toId) {
-            console.error('Invalid message structure, skipping:', msg);
-            return acc;
+        setLoading(true);
+        try {
+          const res = await axios.get(`https://chat-5-ylv7.onrender.com/messages/all`, {
+            withCredentials: true,
+          });
+          if (!res.data.data) {
+            console.log('No messages data received');
+            return;
           }
-          const key = fromId === user._id.toString() ? toId : fromId;
-          acc[key] = [...(acc[key] || []), {
-            ...msg,
-            username: fromId === user._id.toString() ? 'You' : (msg.from && msg.from.username ? msg.from.username : 'Unknown'),
-          }];
-          return acc;
-        }, {});
-        setMessages(allMessages);
-        console.log('Loaded all messages:', allMessages);
-      } catch (err) {
-        console.error('Load all messages error:', err.message, err.response?.data);
-      }
-    };
+          const allMessages = res.data.data.reduce((acc, msg) => {
+            const fromId = msg.from && msg.from._id ? msg.from._id.toString() : null;
+            const toId = msg.to && msg.to._id ? msg.to._id.toString() : null;
+            if (!fromId || !toId) {
+              console.error('Invalid message structure, skipping:', msg);
+              return acc;
+            }
+            const key = fromId === user._id.toString() ? toId : fromId;
+            acc[key] = [...(acc[key] || []), {
+              ...msg,
+              username: fromId === user._id.toString() ? 'You' : (msg.from && msg.from.username ? msg.from.username : 'Unknown'),
+            }];
+            return acc;
+          }, {});
+          setMessages(allMessages);
+          console.log('Loaded all messages:', allMessages);
+        } catch (err) {
+          console.error('Load all messages error:', err.message, err.response?.data);
+        } finally {
+          setLoading(false);
+        }
+      };
     loadAllMessages();
 
     socket.on('newMessage', (message) => {
@@ -96,10 +100,10 @@ export const ChatProvider = ({ children }) => {
 
   const fetchMessages = async (userId) => {
     try {
-      const res = await axios.get(`http://localhost:5007/messages/${userId}`, {
+      const res = await axios.get(`https://chat-5-ylv7.onrender.com/messages/${userId}`, {
         withCredentials: true,
       });
-      console.log('Fetch messages response:', res.data.data); // Debug log
+      console.log('Fetch messages response:', res.data.data);
       setMessages((prev) => ({
         ...prev,
         [userId]: res.data.data.map(msg => {
@@ -135,11 +139,11 @@ export const ChatProvider = ({ children }) => {
 
   const deleteMessage = async (messageId) => {
     try {
-      await axios.delete(`http://localhost:5007/messages/${messageId}`, {
+      await axios.delete(`$https://chat-5-ylv7.onrender.com/messages/${messageId}`, {
         withCredentials: true,
       });
       setMessages((prev) => {
-        const updated = { ...prev };
+        const updated = { prev };
         for (const userId in updated) {
           updated[userId] = updated[userId].filter((msg) => msg._id !== messageId);
         }
