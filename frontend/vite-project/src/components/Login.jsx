@@ -1,50 +1,47 @@
-import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import React, { useState, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
 
 const Login = () => {
-  const { login, loading } = useAuth();
-  const [identifier, setIdentifier] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(null);
+  const [error, setError] = useState('');
+  const { login } = useContext(AuthContext);
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null);
+    setError('');
     try {
-      await login(identifier, password);
+      await login(email, password);
+      navigate('/chat');
     } catch (err) {
-      setError('Invalid credentials');
+      setError(typeof err === 'string' ? err : 'An error occurred during login');
     }
   };
 
-  if (loading) return <p>Loading...</p>;
-
   return (
-    <div style={{ maxWidth: '300px', margin: '50px auto' }}>
+    <form onSubmit={handleSubmit} style={{ maxWidth: '300px', margin: '20px auto' }}>
       <h2>Login</h2>
       {error && <p style={{ color: 'red' }}>{error}</p>}
-      <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          placeholder="Username or Email"
-          value={identifier}
-          onChange={(e) => setIdentifier(e.target.value)}
-          required
-          style={{ display: 'block', margin: '10px 0', width: '100%' }}
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          style={{ display: 'block', margin: '10px 0', width: '100%' }}
-        />
-        <button type="submit" disabled={loading} style={{ width: '100%' }}>
-          Login
-        </button>
-      </form>
-    </div>
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+        required
+        style={{ width: '100%', marginBottom: '10px', padding: '8px' }}
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
+        required
+        style={{ width: '100%', marginBottom: '10px', padding: '8px' }}
+      />
+      <button type="submit" style={{ padding: '8px', width: '100%' }}>Login</button>
+    </form>
   );
 };
 

@@ -1,21 +1,19 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
+const bcrypt = require('bcryptjs');
 
 const userSchema = new Schema({
-  username: { type: String, required: true, unique: true },
-  email: { 
-    type: String, 
-    required: true, 
-    unique: true, 
-    match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email address'] // Basic email validation
-  },
+  username: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   contacts: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-  callHistory: [{
-    participant: { type: Schema.Types.ObjectId, ref: 'User' },
-    date: { type: Date, default: Date.now },
-    duration: Number
-  }]
+}, { timestamps: true });
+
+userSchema.pre('save', async function (next) {
+  if (this.isModified('password')) {
+    this.password = await bcrypt.hash(this.password, 10);
+  }
+  next();
 });
 
 module.exports = mongoose.model('User', userSchema);
