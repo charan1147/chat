@@ -1,58 +1,41 @@
-import React, { useState, useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import { useState, useContext } from 'react';
 import { ContactContext } from '../context/ContactContext';
+import { useNavigate } from 'react-router-dom';
 
-const Contacts = () => {
-  const { user } = useContext(AuthContext);
-  const { contacts, addContact, removeContact } = useContext(ContactContext);
-  const [contactEmail, setContactEmail] = useState(''); // Changed from contactId to contactEmail
-  const [error, setError] = useState(''); // Added error state for feedback
+function Contacts() {
+  const { contacts, addContact, removeContact, error } = useContext(ContactContext);
+  const [email, setEmail] = useState('');
+  const navigate = useNavigate();
 
-  const handleAdd = async () => {
-    if (contactEmail.trim()) {
-      try {
-        await addContact(contactEmail);
-        setContactEmail('');
-        setError('');
-      } catch (err) {
-        setError(err || 'Failed to add contact');
-      }
-    }
+  const handleAddContact = async (e) => {
+    e.preventDefault();
+    await addContact(email);
+    setEmail('');
   };
 
-  if (!user) {
-    return <div>Please login to manage contacts.</div>;
-  }
+  const handleRemoveContact = async (contactId) => {
+    await removeContact(contactId);
+  };
 
   return (
-    <div style={{ padding: '20px' }}>
+    <div>
       <h2>Contacts</h2>
-      <div style={{ marginBottom: '20px' }}>
-        <input
-          type="email" // Changed to email type for better validation
-          value={contactEmail}
-          onChange={(e) => setContactEmail(e.target.value)}
-          placeholder="Enter contact email"
-          style={{ padding: '8px', width: '200px' }}
-        />
-        <button onClick={handleAdd} style={{ padding: '8px', marginLeft: '10px' }}>Add Contact</button>
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-      </div>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+      <form onSubmit={handleAddContact}>
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Add contact by email" required />
+        <button type="submit">Add</button>
+      </form>
       <ul>
         {contacts.map((contact) => (
-          <li key={contact._id} style={{ marginBottom: '10px' }}>
-            {contact.username} ({contact.email})
-            <button
-              onClick={() => removeContact(contact._id)}
-              style={{ marginLeft: '10px', color: 'red' }}
-            >
-              Remove
-            </button>
+          <li key={contact._id}>
+            {contact.email} ({contact.username})
+            <button onClick={() => handleRemoveContact(contact._id)}>Remove</button>
           </li>
         ))}
       </ul>
+      <button onClick={() => navigate('/chat')}>Go to Chat</button>
     </div>
   );
-};
+}
 
 export default Contacts;

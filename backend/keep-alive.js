@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const HEALTH_CHECK_URL = 'https://chat-5-ylv7.onrender.com/health';
+const HEALTH_CHECK_URL = 'https://chat-6-5ldi.onrender.com/health';
 const PING_INTERVAL = 300000; // 5 minutes in milliseconds
 
 const pingServer = async () => {

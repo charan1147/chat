@@ -1,162 +1,137 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
-import axios from 'axios';
-import socket from '../socket';
+import { createContext, useState, useContext, useEffect, useRef } from 'react';
 import { AuthContext } from './AuthContext';
+import { io } from 'socket.io-client';
 
 export const ChatContext = createContext();
 
-export const ChatProvider = ({ children }) => {
-  const [messages, setMessages] = useState({});
-  const [selectedUser, setSelectedUser] = useState(null);
+export function ChatProvider({ children }) {
   const { user } = useContext(AuthContext);
-  const [loading, setLoading] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const socketRef = useRef(null);
 
   useEffect(() => {
-    if (!user || !user._id) {
-      console.log('No user or user._id available, skipping ChatProvider setup');
-      return;
-    }
+    if (!user || !user._id) return;
 
-    socket.io.opts.query.userId = user._id;
-    socket.connect();
-    socket.emit('join', user._id);
-    console.log('Socket connected:', socket.connected, 'User ID:', user._id);
-
-    const loadAllMessages = async () => {
-        setLoading(true);
-        try {
-          const res = await axios.get(`https://chat-5-ylv7.onrender.com/messages/all`, {
-            withCredentials: true,
-          });
-          if (!res.data.data) {
-            console.log('No messages data received');
-            return;
-          }
-          const allMessages = res.data.data.reduce((acc, msg) => {
-            const fromId = msg.from && msg.from._id ? msg.from._id.toString() : null;
-            const toId = msg.to && msg.to._id ? msg.to._id.toString() : null;
-            if (!fromId || !toId) {
-              console.error('Invalid message structure, skipping:', msg);
-              return acc;
-            }
-            const key = fromId === user._id.toString() ? toId : fromId;
-            acc[key] = [...(acc[key] || []), {
-              ...msg,
-              username: fromId === user._id.toString() ? 'You' : (msg.from && msg.from.username ? msg.from.username : 'Unknown'),
-            }];
-            return acc;
-          }, {});
-          setMessages(allMessages);
-          console.log('Loaded all messages:', allMessages);
-        } catch (err) {
-          console.error('Load all messages error:', err.message, err.response?.data);
-        } finally {
-          setLoading(false);
-        }
-      };
-    loadAllMessages();
-
-    socket.on('newMessage', (message) => {
-      console.log('Received message:', message);
-      const fromId = message.from && message.from._id ? message.from._id.toString() : null;
-      const toId = message.to && message.to._id ? message.to._id.toString() : null;
-      if (!fromId || !toId) {
-        console.error('Invalid message from socket:', message);
-        return;
-      }
-      setMessages((prev) => {
-        const key = fromId === user._id.toString() ? toId : fromId;
-        const updated = {
-          ...prev,
-          [key]: [...(prev[key] || []), {
-            ...message,
-            username: fromId === user._id.toString() ? 'You' : (message.from && message.from.username ? message.from.username : 'Unknown'),
-          }],
-        };
-        console.log('Updated messages:', updated);
-        return updated;
-      });
+    socketRef.current = io('https://chat-6-5ldi.onrender.com', {
+      withCredentials: true,
+      query: { userId: user._id },
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
     });
 
-    socket.on('messageDeleted', ({ messageId }) => {
-      setMessages((prev) => {
-        const updated = { ...prev };
-        for (const key in updated) {
-          updated[key] = updated[key].filter((msg) => msg._id !== messageId);
-        }
-        return updated;
-      });
+    socketRef.current.on('connect', () => {
+      console.log('Socket connected:', socketRef.current.id);
+      setError(null);
+      socketRef.current.emit('join', user._id);
     });
 
-    socket.on('error', (err) => console.error('Socket error:', err.message));
+    socketRef.current.on('newMessage', (message) => {
+      console.log('Received new message:', message);
+      setMessages((prev) => [...prev, message]);
+    });
+
+    socketRef.current.on('messageDeleted', ({ messageId }) => {
+      setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
+    });
+
+    socketRef.current.on('error', (err) => {
+      setError(err.message || 'Socket connection error');
+      console.error('Socket error:', err);
+    });
+
+    socketRef.current.on('disconnect', () => {
+      setError('Disconnected from server');
+      console.log('Socket disconnected');
+    });
+
+    socketRef.current.on('reconnect', () => {
+      console.log('Socket reconnected');
+      socketRef.current.emit('join', user._id);
+    });
 
     return () => {
-      socket.off('newMessage');
-      socket.off('messageDeleted');
-      socket.off('error');
-      socket.disconnect();
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
     };
   }, [user]);
 
-  const fetchMessages = async (userId) => {
+  const fetchMessages = async (email) => {
+    if (!email) return;
+    setIsLoading(true);
     try {
-      const res = await axios.get(`https://chat-5-ylv7.onrender.com/messages/${userId}`, {
-        withCredentials: true,
+      console.log('Fetching messages for email:', email);
+      const response = await fetch(`https://chat-6-5ldi.onrender.com/api/messages/${encodeURIComponent(email)}`, {
+        credentials: 'include',
       });
-      console.log('Fetch messages response:', res.data.data);
-      setMessages((prev) => ({
-        ...prev,
-        [userId]: res.data.data.map(msg => {
-          const fromId = msg.from && msg.from._id ? msg.from._id.toString() : null;
-          if (!fromId) {
-            console.error('Invalid from in message:', msg);
-            return { ...msg, username: 'Unknown' };
-          }
-          return {
-            ...msg,
-            username: fromId === user._id.toString() ? 'You' : (msg.from && msg.from.username ? msg.from.username : 'Unknown'),
-          };
-        }),
-      }));
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
+      const data = await response.json();
+      console.log('Fetch messages response:', data);
+      if (data.success) setMessages(data.data);
+      else throw new Error(data.message || 'Failed to fetch messages');
     } catch (err) {
-      console.error('Fetch messages error:', err.message, err.response?.data);
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const sendMessage = (to, content) => {
-    if (!user || !user._id || !to) {
-      console.error('Invalid sendMessage parameters:', { user, to });
-      return;
+  const sendMessage = async (email, text) => {
+    if (!email || !text) return;
+    setIsLoading(true);
+    try {
+      console.log('Sending message to email:', email, 'with text:', text);
+      const response = await fetch(`https://chat-6-5ldi.onrender.com/api/messages/${encodeURIComponent(email)}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, type: 'text' }),
+      });
+      const responseText = await response.text(); // Get raw response
+      console.log('Raw response:', responseText);
+      const data = responseText ? JSON.parse(responseText) : {};
+      console.log('Parsed send message response:', data);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
+      if (data.success && data.data) {
+        setMessages((prev) => [...prev, data.data]);
+        if (socketRef.current) socketRef.current.emit('newMessage', data.data);
+      } else throw new Error(data.message || 'Invalid response');
+    } catch (err) {
+      setError(err.message);
+      console.error('Send message error:', err, 'Response status:', response?.status);
+    } finally {
+      setIsLoading(false);
     }
-    const message = { from: user._id, to, content, type: 'text' };
-    console.log('Sending message:', message);
-    socket.emit('sendMessage', message);
-    setMessages((prev) => ({
-      ...prev,
-      [to]: [...(prev[to] || []), { ...message, username: 'You', isRead: false }],
-    }));
   };
 
   const deleteMessage = async (messageId) => {
+    if (!messageId) return;
+    setIsLoading(true);
     try {
-      await axios.delete(`$https://chat-5-ylv7.onrender.com/messages/${messageId}`, {
-        withCredentials: true,
+      const response = await fetch(`https://chat-6-5ldi.onrender.com/api/messages/${messageId}`, {
+        method: 'DELETE',
+        credentials: 'include',
       });
-      setMessages((prev) => {
-        const updated = { prev };
-        for (const userId in updated) {
-          updated[userId] = updated[userId].filter((msg) => msg._id !== messageId);
-        }
-        return updated;
-      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      if (data.success) {
+        if (socketRef.current) socketRef.current.emit('messageDeleted', { messageId, to: user._id });
+        setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
+      }
     } catch (err) {
-      console.error('Delete message error:', err.message);
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <ChatContext.Provider value={{ messages, selectedUser, setSelectedUser, fetchMessages, sendMessage, deleteMessage }}>
+    <ChatContext.Provider value={{ messages, setMessages, fetchMessages, sendMessage, deleteMessage, error, isLoading }}>
       {children}
     </ChatContext.Provider>
   );
-};
+}

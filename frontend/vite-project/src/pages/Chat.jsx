@@ -1,119 +1,112 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
-import { AuthContext } from '../context/AuthContext';
-import { ChatContext } from '../context/ChatContext';
+import { useState, useContext, useEffect, useRef } from 'react';
+import { useParams } from 'react-router-dom';
 import { ContactContext } from '../context/ContactContext';
 import { CallContext } from '../context/CallContext';
+import { ChatContext } from '../context/ChatContext';
+import { AuthContext } from '../context/AuthContext';
+import ErrorBoundary from '../components/ErrorBoundary';
 
-const Chat = () => {
-  const { user } = useContext(AuthContext);
-  const { messages, selectedUser, setSelectedUser, fetchMessages, sendMessage } = useContext(ChatContext);
+function Chat() {
   const { contacts } = useContext(ContactContext);
-  const { call, stream, startCall, answerCall, endCall } = useContext(CallContext);
-  const [messageContent, setMessageContent] = useState('');
-  const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef(null);
+  const { callActive, caller, startCall, handleOffer, handleAnswer, handleCandidate, endCall, remoteStream } = useContext(CallContext);
+  const { messages, fetchMessages, sendMessage, deleteMessage, error, isLoading: chatLoading } = useContext(ChatContext);
+  const { user, isLoading: authLoading, error: authError } = useContext(AuthContext);
+  const { userId } = useParams();
+  console.log('Chat render - user:', user, 'authLoading:', authLoading, 'userId from params:', userId);
+  const [newMessage, setNewMessage] = useState('');
+  const [recipientEmail, setRecipientEmail] = useState(''); // Store email for backend
+  const videoRef = useRef(null);
+  const [prevRecipientEmail, setPrevRecipientEmail] = useState('');
 
   useEffect(() => {
-    if (selectedUser) {
-      fetchMessages(selectedUser._id);
+    if (remoteStream.current && videoRef.current) {
+      videoRef.current.srcObject = remoteStream.current;
+      videoRef.current.play().catch((err) => console.error('Video play failed:', err));
     }
-  }, [selectedUser]);
+  }, [remoteStream]);
 
-  useEffect(() => {
-    if (stream && localVideoRef.current) {
-      localVideoRef.current.srcObject = stream;
-    }
-    if (call?.remoteStream && remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = call.remoteStream;
-    }
-  }, [stream, call?.remoteStream]);
-
-  const handleSend = () => {
-    if (messageContent.trim() && selectedUser) {
-      sendMessage(selectedUser._id, messageContent);
-      setMessageContent('');
+  const handleSelectContact = (email) => {
+    setRecipientEmail(email);
+    if (email && email !== prevRecipientEmail) {
+      fetchMessages(email);
+      setPrevRecipientEmail(email);
     }
   };
 
-  const allSenders = [
-    ...contacts,
-    ...Object.keys(messages)
-      .filter(id => !contacts.some(c => c._id === id) && id !== user._id.toString())
-      .map(id => ({
-        _id: id,
-        username: messages[id][0]?.username || 'Unknown',
-      })),
-  ];
-  console.log('All senders:', allSenders);
+  const handleSendMessage = () => {
+    if (recipientEmail && newMessage) {
+      sendMessage(recipientEmail, newMessage);
+      setNewMessage('');
+    }
+  };
 
-  if (!user) {
-    return <div>Please login to access chat.</div>;
-  }
+  const initiateCall = async (email, isVideo) => {
+    if (email && !authLoading) await startCall(email, isVideo);
+  };
+
+  if (authLoading) return <p>Loading authentication...</p>;
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 60px)' }}>
-      <div style={{ width: '30%', borderRight: '1px solid #ccc', padding: '10px' }}>
-        <h3>Conversations</h3>
-        {allSenders.length > 0 ? (
-          allSenders.map((sender) => (
-            <div
-              key={sender._id}
-              onClick={() => setSelectedUser(sender)}
-              style={{
-                padding: '10px',
-                cursor: 'pointer',
-                background: selectedUser?._id === sender._id ? '#e0e0e0' : 'transparent',
-              }}
-            >
-              {sender.username}
-            </div>
-          ))
-        ) : (
-          <p>No conversations yet.</p>
-        )}
+    <ErrorBoundary>
+      <div>
+        <h2>Chat</h2>
+        {(authError || error) && <p style={{ color: 'red' }}>{authError || error}</p>}
+        {chatLoading && <p>Loading...</p>}
+        {callActive && <p>Call with {caller || 'someone'} active. <button onClick={endCall}>End Call</button></p>}
+        <h3>Contact List</h3>
+        <ul>
+          {contacts.length > 0 ? (
+            contacts.map((contact) => (
+              <li key={contact._id} onClick={() => handleSelectContact(contact.email)} style={{ cursor: 'pointer' }}>
+                {contact.username} ({contact.email})
+              </li>
+            ))
+          ) : (
+            <li>No contacts available</li>
+          )}
+        </ul>
+        <input
+          type="text"
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          placeholder="Type message"
+          disabled={!recipientEmail || chatLoading || callActive || authLoading}
+        />
+        <button onClick={handleSendMessage} disabled={!recipientEmail || chatLoading || callActive || authLoading}>
+          Send
+        </button>
+        <ul>
+          {user ? (
+            messages.map((msg) => (
+              <li key={msg._id}>
+                {msg.from.email}: {msg.content} {msg.from._id.toString() === user._id ? '(You)' : ''}
+                {msg.from._id.toString() === user._id && (
+                  <button onClick={() => deleteMessage(msg._id)} disabled={chatLoading || callActive || authLoading}>
+                    Delete
+                  </button>
+                )}
+              </li>
+            ))
+          ) : (
+            <li>No user data available</li>
+          )}
+        </ul>
+        <button
+          onClick={() => initiateCall(recipientEmail, true)}
+          disabled={!recipientEmail || chatLoading || callActive || authLoading}
+        >
+          Video Call
+        </button>
+        <button
+          onClick={() => initiateCall(recipientEmail, false)}
+          disabled={!recipientEmail || chatLoading || callActive || authLoading}
+        >
+          Audio Call
+        </button>
+        {callActive && <video ref={videoRef} autoPlay style={{ width: '300px' }} />}
       </div>
-      <div style={{ width: '70%', padding: '10px' }}>
-        {selectedUser ? (
-          <>
-            <h3>Chat with {selectedUser.username}</h3>
-            <div style={{ marginBottom: '10px' }}>
-              <button onClick={() => startCall(selectedUser._id, false)}>Audio Call</button>
-              <button onClick={() => startCall(selectedUser._id, true)} style={{ marginLeft: '10px' }}>Video Call</button>
-              {call?.isIncoming && (
-                <button onClick={answerCall} style={{ marginLeft: '10px' }}>Answer Call</button>
-              )}
-              {call && (
-                <button onClick={endCall} style={{ marginLeft: '10px' }}>End Call</button>
-              )}
-            </div>
-            <div style={{ display: 'flex', marginBottom: '10px' }}>
-              <video ref={localVideoRef} autoPlay muted style={{ width: '50%', border: '1px solid #ccc' }} />
-              <video ref={remoteVideoRef} autoPlay style={{ width: '50%', border: '1px solid #ccc' }} />
-            </div>
-            <div style={{ height: '50%', overflowY: 'auto', border: '1px solid #ccc', padding: '10px' }}>
-              {(messages[selectedUser._id] || []).map((msg) => (
-                <div key={msg._id} style={{ marginBottom: '10px' }}>
-                  <strong>{msg.username || 'Unknown'}:</strong> {msg.content}
-                </div>
-              ))}
-            </div>
-            <div style={{ marginTop: '10px' }}>
-              <input
-                type="text"
-                value={messageContent}
-                onChange={(e) => setMessageContent(e.target.value)}
-                placeholder="Type a message"
-                style={{ width: '80%', padding: '8px' }}
-              />
-              <button onClick={handleSend} style={{ padding: '8px', marginLeft: '10px' }}>Send</button>
-            </div>
-          </>
-        ) : (
-          <p>Select a conversation to start chatting.</p>
-        )}
-      </div>
-    </div>
+    </ErrorBoundary>
   );
-};
+}
 
 export default Chat;

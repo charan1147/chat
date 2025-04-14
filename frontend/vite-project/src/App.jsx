@@ -1,58 +1,38 @@
-import React, { Component } from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { ChatProvider } from './context/ChatContext';
+import { CallProvider } from './context/CallContext';
+import { ContactProvider } from './context/ContactContext';
 import Navbar from './components/Navbar';
+import Login from './components/Login';
+import Register from './components/Register';
 import Home from './pages/Home';
 import Chat from './pages/Chat';
 import Contacts from './pages/Contacts';
-import Login from './components/Login';
-import Register from './components/Register';
-import { CallProvider } from './context/CallContext';
-import { ChatProvider } from './context/ChatContext';
-import { ContactProvider } from './context/ContactContext';
-import { AuthProvider } from './context/AuthContext';
-
-class ErrorBoundary extends Component {
-  state = { hasError: false, error: null };
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div>
-          <h1>Something went wrong.</h1>
-          <p>Error: {this.state.error.message}</p>
-          <button onClick={() => this.setState({ hasError: false, error: null })}>Try Again</button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+import ErrorBoundary from './components/ErrorBoundary';
+import './App.css';
 
 function App() {
   return (
     <Router>
-      <AuthProvider>
-        <ErrorBoundary>
+      <ErrorBoundary>
+        <AuthProvider>
           <ChatProvider>
-            <ContactProvider>
-              <CallProvider>
+            <CallProvider>
+              <ContactProvider>
                 <Navbar />
                 <Routes>
-                  <Route path="/" element={<Home />} />
-                  <Route path="/chat" element={<Chat />} />
-                  <Route path="/contacts" element={<Contacts />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
+                  <Route path="/" element={<Home />} />
+                  <Route path="/chat/:userId?" element={<Chat />} /> {/* Optional userId param */}
+                  <Route path="/contacts" element={<Contacts />} />
                 </Routes>
-              </CallProvider>
-            </ContactProvider>
+              </ContactProvider>
+            </CallProvider>
           </ChatProvider>
-        </ErrorBoundary>
-      </AuthProvider>
+        </AuthProvider>
+      </ErrorBoundary>
     </Router>
   );
 }

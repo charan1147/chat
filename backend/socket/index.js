@@ -12,34 +12,34 @@ const initSocket = (server) => {
 
   io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
+    const userId = socket.handshake.query.userId; // Expecting _id or email
 
-    socket.on('join', (userId) => {
-      socket.join(userId);
-      console.log(`User ${userId} joined their room`);
+    socket.on('join', (roomId) => {
+      socket.join(roomId);
+      console.log(`User ${roomId} joined their room`);
     });
 
     socket.on('sendMessage', async ({ to, content, type, from }) => {
-        try {
-          const recipient = await User.findById(to);
-          const sender = await User.findById(from);
-          if (!recipient || !sender) {
-            socket.emit('error', { message: 'Recipient or sender not found' });
-            return;
-          }
-          const message = await Message.create({ from, to, content, type });
-          const enrichedMessage = {
-            ...message.toObject(),
-            from: { _id: sender._id, username: sender.username },
-            to: { _id: recipient._id, username: recipient.username },
-          };
-          console.log('Emitted message:', enrichedMessage);
-          io.to(to).emit('newMessage', enrichedMessage);
-          io.to(from).emit('newMessage', enrichedMessage);
-        } catch (err) {
-          socket.emit('error', { message: err.message });
+      try {
+        const recipient = await User.findById(to) || await User.findOne({ email: to }); // Support _id or email
+        const sender = await User.findById(from) || await User.findOne({ email: from });
+        if (!recipient || !sender) {
+          socket.emit('error', { message: 'Recipient or sender not found' });
+          return;
         }
-      });
-
+        const message = await Message.create({ from: sender._id, to: recipient._id, content, type });
+        const enrichedMessage = {
+          ...message.toObject(),
+          from: { _id: sender._id, username: sender.username, email: sender.email },
+          to: { _id: recipient._id, username: recipient.username, email: recipient.email },
+        };
+        console.log('Emitted message:', enrichedMessage);
+        io.to(recipient._id.toString()).emit('newMessage', enrichedMessage);
+        io.to(sender._id.toString()).emit('newMessage', enrichedMessage);
+      } catch (err) {
+        socket.emit('error', { message: err.message });
+      }
+    });
 
     socket.on('markAsRead', async ({ messageId, to }) => {
       try {
@@ -57,27 +57,31 @@ const initSocket = (server) => {
     });
 
     socket.on('typing', ({ to }) => {
-      socket.to(to).emit('typing', { from: socket.handshake.query.userId || socket.id });
+      socket.to(to).emit('typing', { from: userId });
     });
 
     socket.on('stopTyping', ({ to }) => {
-      socket.to(to).emit('stopTyping', { from: socket.handshake.query.userId || socket.id });
+      socket.to(to).emit('stopTyping', { from: userId });
     });
 
-    socket.on('offer', ({ to, offer }) => {
-      socket.to(to).emit('offer', { from: socket.handshake.query.userId || socket.id, offer });
+    socket.on('callOffer', ({ to, signal, isVideo }) => {
+      socket.to(to).emit('callOffer', { from: userId, signal, isVideo });
     });
 
-    socket.on('answer', ({ to, answer }) => {
-      socket.to(to).emit('answer', { from: socket.handshake.query.userId || socket.id, answer });
+    socket.on('callAnswer', ({ to, answer }) => {
+      socket.to(to).emit('callAnswer', { from: userId, answer });
     });
 
     socket.on('ice-candidate', ({ to, candidate }) => {
-      socket.to(to).emit('ice-candidate', { from: socket.handshake.query.userId || socket.id, candidate });
+      socket.to(to).emit('ice-candidate', { from: userId, candidate });
     });
 
     socket.on('endCall', ({ to }) => {
-      socket.to(to).emit('endCall', { from: socket.handshake.query.userId || socket.id });
+      socket.to(to).emit('endCall', { from: userId });
+    });
+
+    socket.on('messageDeleted', ({ messageId, to }) => {
+      io.to(to).emit('messageDeleted', { messageId });
     });
 
     socket.on('disconnect', () => {

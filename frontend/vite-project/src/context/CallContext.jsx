@@ -1,123 +1,164 @@
-import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
-import socket from '../socket';
-import { AuthContext } from './AuthContext';
+import { createContext, useState, useRef, useContext, useEffect } from 'react';
+import { ChatContext } from './ChatContext';
+import { io } from 'socket.io-client';
 
 export const CallContext = createContext();
 
-export const CallProvider = ({ children }) => {
-  const { user } = useContext(AuthContext);
-  const [call, setCall] = useState(null);
-  const [stream, setStream] = useState(null);
-  const peerRef = useRef(null);
+export function CallProvider({ children }) {
+  const { user } = useContext(ChatContext);
+  const [callActive, setCallActive] = useState(false);
+  const [caller, setCaller] = useState(null);
+  const peerConnection = useRef(null);
+  const localStream = useRef(null);
+  const remoteStream = useRef(null);
+  const socketRef = useRef(null); // Changed to ref for better control
 
   useEffect(() => {
-    if (user) {
-      socket.on('offer', async ({ from, offer }) => {
-        setCall({ from, offer, isIncoming: true });
-      });
+    if (!user || !user._id) return;
 
-      socket.on('answer', ({ answer }) => {
-        if (peerRef.current) {
-          peerRef.current.setRemoteDescription(new RTCSessionDescription(answer));
-        }
-      });
+    socketRef.current = io('https://chat-6-5ldi.onrender.com', {
+      withCredentials: true,
+      query: { userId: user._id },
+      reconnection: true, // Enable automatic reconnection
+      reconnectionAttempts: 5, // Limit reconnection attempts
+      reconnectionDelay: 1000, // Delay between attempts (1 second)
+    });
 
-      socket.on('ice-candidate', ({ candidate }) => {
-        if (peerRef.current) {
-          peerRef.current.addIceCandidate(new RTCIceCandidate(candidate));
-        }
-      });
+    socketRef.current.on('connect', () => {
+      console.log('Socket connected:', socketRef.current.id);
+    });
 
-      socket.on('endCall', () => {
-        endCall();
-      });
+    socketRef.current.on('callOffer', ({ from, signal, isVideo }) => {
+      setCaller(from);
+      handleOffer(signal, isVideo);
+    });
 
-      return () => {
-        socket.off('offer');
-        socket.off('answer');
-        socket.off('ice-candidate');
-        socket.off('endCall');
-      };
-    }
+    socketRef.current.on('callAnswer', (signal) => handleAnswer(signal));
+    socketRef.current.on('ice-candidate', (candidate) => handleCandidate(candidate));
+    socketRef.current.on('endCall', () => endCall());
+
+    socketRef.current.on('disconnect', () => {
+      console.log('Socket disconnected');
+    });
+
+    socketRef.current.on('reconnect', () => {
+      console.log('Socket reconnected');
+      if (user._id) socketRef.current.emit('join', user._id);
+    });
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
   }, [user]);
 
-  const startCall = async (to, video = true) => {
+  const startCall = async (email, isVideo) => {
+    setCallActive(true);
+    const pc = new RTCPeerConnection();
+    peerConnection.current = pc;
+
     try {
-      const peer = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      // Map email to _id
+      const response = await fetch(`https://chat-6-5ldi.onrender.com/api/auth/me?email=${encodeURIComponent(email)}`, {
+        credentials: 'include',
       });
-      peerRef.current = peer;
+      const data = await response.json();
+      const toId = data.data?._id;
+      if (!toId) throw new Error('Recipient not found');
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video });
-      setStream(stream);
-      stream.getTracks().forEach((track) => peer.addTrack(track, stream));
+      const stream = await navigator.mediaDevices.getUserMedia({ video: isVideo, audio: true });
+      localStream.current = stream;
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-      peer.onicecandidate = (event) => {
+      pc.ontrack = (event) => {
+        remoteStream.current = event.streams[0];
+      };
+
+      pc.onicecandidate = (event) => {
         if (event.candidate) {
-          socket.emit('ice-candidate', { to, candidate: event.candidate });
+          socketRef.current.emit('ice-candidate', { to: toId, candidate: event.candidate });
         }
       };
 
-      peer.ontrack = (event) => {
-        setCall((prev) => ({ ...prev, remoteStream: event.streams[0] }));
-      };
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socketRef.current.emit('callOffer', { to: toId, signal: offer, isVideo });
 
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      socket.emit('offer', { to, offer });
-      setCall({ to, peer, video });
-    } catch (err) {
-      console.error('Start call error:', err);
+      return pc;
+    } catch (error) {
+      console.error('Call setup failed:', error);
+      endCall();
     }
   };
 
-  const answerCall = async () => {
+  const handleOffer = async (signal, isVideo) => {
+    setCallActive(true);
+    const pc = peerConnection.current || new RTCPeerConnection();
+    peerConnection.current = pc;
+
     try {
-      const peer = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-      });
-      peerRef.current = peer;
+      if (!localStream.current) {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: isVideo, audio: true });
+        localStream.current = stream;
+        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+      }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: call.video });
-      setStream(stream);
-      stream.getTracks().forEach((track) => peer.addTrack(track, stream));
+      pc.ontrack = (event) => {
+        remoteStream.current = event.streams[0];
+      };
 
-      peer.onicecandidate = (event) => {
+      pc.onicecandidate = (event) => {
         if (event.candidate) {
-          socket.emit('ice-candidate', { to: call.from, candidate: event.candidate });
+          socketRef.current.emit('ice-candidate', { to: caller, candidate: event.candidate });
         }
       };
 
-      peer.ontrack = (event) => {
-        setCall((prev) => ({ ...prev, remoteStream: event.streams[0] }));
-      };
+      await pc.setRemoteDescription(new RTCSessionDescription(signal));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      socketRef.current.emit('callAnswer', { to: caller, answer });
+    } catch (error) {
+      console.error('Offer handling failed:', error);
+      endCall();
+    }
+  };
 
-      await peer.setRemoteDescription(new RTCSessionDescription(call.offer));
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      socket.emit('answer', { to: call.from, answer });
-      setCall((prev) => ({ ...prev, peer, isIncoming: false }));
-    } catch (err) {
-      console.error('Answer call error:', err);
+  const handleAnswer = async (answer) => {
+    try {
+      await peerConnection.current.setRemoteDescription(new RTCSessionDescription(answer));
+    } catch (error) {
+      console.error('Answer handling failed:', error);
+    }
+  };
+
+  const handleCandidate = async (candidate) => {
+    try {
+      await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch (error) {
+      console.error('Candidate handling failed:', error);
     }
   };
 
   const endCall = () => {
-    if (peerRef.current) {
-      peerRef.current.close();
+    if (peerConnection.current) {
+      peerConnection.current.close();
+      peerConnection.current = null;
     }
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+    if (localStream.current) {
+      localStream.current.getTracks().forEach((track) => track.stop());
+      localStream.current = null;
     }
-    socket.emit('endCall', { to: call?.to || call?.from });
-    setCall(null);
-    setStream(null);
-    peerRef.current = null;
+    remoteStream.current = null;
+    setCallActive(false);
+    setCaller(null);
+    if (socketRef.current) socketRef.current.emit('endCall', { to: caller || user._id });
   };
 
   return (
-    <CallContext.Provider value={{ call, stream, startCall, answerCall, endCall }}>
+    <CallContext.Provider value={{ callActive, caller, startCall, handleOffer, handleAnswer, handleCandidate, endCall, remoteStream }}>
       {children}
     </CallContext.Provider>
   );
-};
+}

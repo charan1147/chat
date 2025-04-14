@@ -16,41 +16,35 @@ const app = express();
 const server = http.createServer(app);
 const io = initSocket(server);
 
-// CORS configuration
-const allowedOrigins = ['http://localhost:5173', 'https://your-frontend-domain.com', 'http://localhost'];
-
+console.log('Loaded FRONTEND_URL:', process.env.FRONTEND_URL); // Debug CORS origin
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173', // Fallback for testing
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
-
 app.use(express.json());
 app.use(cookieParser());
 app.set('socketio', io);
 
 connectDB();
 
-// Health check endpoint
 app.get('/health', (req, res) => {
   console.log('Health check received at', new Date().toISOString());
-  res.status(200).send('OK'); // Explicit status and response
+  res.status(200).send('OK');
 });
 
-// Routes
-app.use('/auth', authRoutes);
-app.use('/contacts', contactRoutes);
-app.use('/messages', messageRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/contacts', contactRoutes);
+app.use('/api/messages', messageRoutes);
 
-// Keep-alive logic
-const HEALTH_CHECK_URL = 'https://chat-5-ylv7.onrender.com/health';
-const PING_INTERVAL = 300000; // 5 minutes in milliseconds
+// 404 handler for undefined routes
+app.use((req, res) => {
+  console.log(`404: Route not found - ${req.method} ${req.url} from ${req.get('origin')}`);
+  res.status(404).json({ message: 'Route not found' });
+});
+
+const HEALTH_CHECK_URL = 'https://chat-6-5ldi.onrender.com/health';
+const PING_INTERVAL = 300000;
 
 const pingServer = async () => {
   try {
@@ -66,9 +60,9 @@ const pingServer = async () => {
   }
 };
 
-// Initial ping and start interval
-pingServer(); // Ping immediately on startup
-setInterval(pingServer, PING_INTERVAL);
-
 const PORT = process.env.PORT || 5007;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  pingServer(); // Initial ping
+  setInterval(pingServer, PING_INTERVAL);
+});

@@ -1,48 +1,53 @@
-import React, { useState, useContext } from 'react';
+import { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import ErrorBoundary from '../components/ErrorBoundary';
 
-const Login = () => {
+function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const { login } = useContext(AuthContext);
+  const { login, error, isLoading } = useContext(AuthContext);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    if (!email || !password) {
+      console.error('Email and password are required');
+      return;
+    }
     try {
       await login(email, password);
-      navigate('/chat');
+      navigate('/contacts'); // Redirect to contacts page
     } catch (err) {
-      setError(typeof err === 'string' ? err : 'An error occurred during login');
+      console.error('Login failed:', err.message);
+      // Error is handled by AuthContext and displayed below
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: '300px', margin: '20px auto' }}>
-      <h2>Login</h2>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="Email"
-        required
-        style={{ width: '100%', marginBottom: '10px', padding: '8px' }}
-      />
-      <input
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Password"
-        required
-        style={{ width: '100%', marginBottom: '10px', padding: '8px' }}
-      />
-      <button type="submit" style={{ padding: '8px', width: '100%' }}>Login</button>
-    </form>
+    <ErrorBoundary>
+      <form onSubmit={handleSubmit}>
+        <h2>Login</h2>
+        {error && <p style={{ color: 'red' }}>{error}</p>}
+        {isLoading && <p>Loading...</p>}
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email"
+          required
+        />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+          required
+        />
+        <button type="submit" disabled={isLoading}>Login</button>
+      </form>
+    </ErrorBoundary>
   );
-};
+}
 
 export default Login;
