@@ -43,7 +43,7 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
-const HEALTH_CHECK_URL = 'https://chat-6-5ldi.onrender.com/health';
+const HEALTH_CHECK_URL = process.env.FRONTEND_URL;
 const PING_INTERVAL = 300000;
 
 const pingServer = async () => {

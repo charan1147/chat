@@ -14,7 +14,7 @@ export function ChatProvider({ children }) {
   useEffect(() => {
     if (!user || !user._id) return;
 
-    socketRef.current = io('http://localhost:5007', {
+    socketRef.current = io('https://chat-7-jbot.onrender.com', {
       withCredentials: true,
       query: { userId: user._id },
       reconnection: true,
@@ -65,7 +65,7 @@ export function ChatProvider({ children }) {
     setIsLoading(true);
     try {
       console.log('Fetching messages for email:', email);
-      const response = await fetch(`http://localhost:5007/api/messages/${encodeURIComponent(email)}`, {
+      const response = await fetch(`https://chat-7-jbot.onrender.com/api/messages/${encodeURIComponent(email)}`, {
         credentials: 'include',
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
@@ -85,7 +85,7 @@ export function ChatProvider({ children }) {
     setIsLoading(true);
     try {
       console.log('Sending message to email:', email, 'with text:', text);
-      const response = await fetch(`http://localhost:5007/api/messages/${encodeURIComponent(email)}`, {
+      const response = await fetch(`https://chat-7-jbot.onrender.com/api/messages/${encodeURIComponent(email)}`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -112,7 +112,7 @@ export function ChatProvider({ children }) {
     if (!messageId) return;
     setIsLoading(true);
     try {
-      const response = await fetch(`http://localhost:5007/api/messages/${messageId}`, {
+      const response = await fetch(`https://chat-7-jbot.onrender.com/api/messages/${messageId}`, {
         method: 'DELETE',
         credentials: 'include',
       });

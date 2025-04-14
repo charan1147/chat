@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 
-const URL = 'http://localhost:5007'; // Changed to local backend
+const URL = 'https://chat-7-jbot.onrender.com'; // Changed to local backend
 
 const socket = io(URL, {
   withCredentials: true,
