@@ -14,7 +14,7 @@ export function ContactProvider({ children }) {
 
   const fetchContacts = async () => {
     try {
-      const response = await fetch('https://chat-6-5ldi.onrender.com/api/contacts', {
+      const response = await fetch('http://localhost:5007/api/contacts', {
         credentials: 'include',
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -27,7 +27,7 @@ export function ContactProvider({ children }) {
 
   const addContact = async (email) => {
     try {
-      const response = await fetch('https://chat-6-5ldi.onrender.com/api/contacts/add', {
+      const response = await fetch('http://localhost:5007/api/contacts/add', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -43,7 +43,7 @@ export function ContactProvider({ children }) {
 
   const removeContact = async (contactId) => {
     try {
-      const response = await fetch(`https://chat-6-5ldi.onrender.com/api/contacts/${contactId}`, {
+      const response = await fetch(`http://localhost:5007/api/contacts/${contactId}`, {
         method: 'DELETE',
         credentials: 'include',
       });
