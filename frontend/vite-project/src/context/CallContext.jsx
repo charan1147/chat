@@ -16,7 +16,7 @@ export function CallProvider({ children }) {
   useEffect(() => {
     if (!user || !user._id) return;
 
-    socketRef.current = io('https://chat-7-jbot.onrender.com', {
+    socketRef.current = io('https://chat-7-s9jw.onrender.com', {
       withCredentials: true,
       query: { userId: user._id },
       reconnection: true, // Enable automatic reconnection
@@ -61,7 +61,7 @@ export function CallProvider({ children }) {
 
     try {
       // Map email to _id
-      const response = await fetch(`https://chat-7-jbot.onrender.com/api/auth/me?email=${encodeURIComponent(email)}`, {
+      const response = await fetch(`https://chat-7-s9jw.onrender.com/api/auth/me?email=${encodeURIComponent(email)}`, {
         credentials: 'include',
       });
       const data = await response.json();

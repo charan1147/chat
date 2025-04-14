@@ -10,7 +10,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await fetch('https://chat-7-jbot.onrender.com/api/auth/me', {
+        const response = await fetch('https://chat-7-s9jw.onrender.com/api/auth/me', {
           credentials: 'include',
         });
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -28,7 +28,7 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     setIsLoading(true);
     try {
-      const response = await fetch('https://chat-7-jbot.onrender.com/api/auth/login', {
+      const response = await fetch('https://chat-7-s9jw.onrender.com/api/auth/login', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
