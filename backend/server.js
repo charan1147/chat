@@ -17,8 +17,19 @@ const server = http.createServer(app);
 const io = initSocket(server);
 
 console.log('Loaded FRONTEND_URL:', process.env.FRONTEND_URL); // Debug CORS origin
+const allowedOrigins = [
+  'https://sweet-belekoy-24c58d.netlify.app',
+  'http://localhost:5173',
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173', // Fallback for testing
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS Error: Origin ${origin} not allowed`));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
